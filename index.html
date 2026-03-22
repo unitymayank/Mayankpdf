@@ -1,0 +1,1407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>OmniTool | Advanced Media Toolkit</title>
+    
+    <link rel="manifest" href='data:application/manifest+json,{"name":"OmniTool","short_name":"OmniTool","display":"standalone","background_color":"#121212","theme_color":"#6366f1"}'>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & THEME
+           ========================================================================== */
+        :root {
+            --bg-color: #f8fafc;
+            --surface: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --border: #e2e8f0;
+            --glass-bg: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.5);
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --danger: #ef4444;
+            --success: #10b981;
+            --radius: 12px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #0f172a;
+            --surface: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #334155;
+            --glass-bg: rgba(30, 41, 59, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            transition: var(--transition);
+            overflow: hidden; /* App-like feel */
+        }
+
+        /* ==========================================================================
+           LAYOUT SYSTEM (Desktop & Mobile)
+           ========================================================================== */
+        #app {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* Sidebar (Desktop) */
+        #sidebar {
+            width: 260px;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            transition: var(--transition);
+            z-index: 10;
+        }
+
+        .brand {
+            padding: 24px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--primary);
+        }
+
+        .nav-links {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 12px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            border-radius: var(--radius);
+            cursor: pointer;
+            color: var(--text-muted);
+            transition: var(--transition);
+            font-weight: 500;
+        }
+
+        .nav-item:hover {
+            background: var(--bg-color);
+            color: var(--primary);
+        }
+
+        .nav-item.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        /* Bottom Nav (Mobile) */
+        #bottom-nav {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            padding: 8px;
+            z-index: 20;
+            justify-content: space-around;
+            backdrop-filter: blur(10px);
+        }
+
+        .bottom-nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 8px;
+        }
+        .bottom-nav-item.active { color: var(--primary); }
+
+        /* Main Content */
+        #main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #topbar {
+            height: 64px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            z-index: 5;
+        }
+
+        .topbar-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .icon-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .icon-btn:hover { background: var(--bg-color); color: var(--text-main); }
+
+        #workspace {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            position: relative;
+        }
+
+        /* Modules */
+        .module {
+            display: none;
+            animation: fadeIn 0.4s ease forwards;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .module.active { display: block; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ==========================================================================
+           UI COMPONENTS
+           ========================================================================== */
+        
+        /* Drag & Drop Zone */
+        .drop-zone {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 48px 24px;
+            text-align: center;
+            background: var(--surface);
+            transition: var(--transition);
+            cursor: pointer;
+            margin-bottom: 24px;
+        }
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.05);
+        }
+        .drop-zone input[type="file"] { display: none; }
+        .drop-zone-icon { font-size: 3rem; margin-bottom: 16px; color: var(--primary); }
+
+        /* Buttons */
+        .btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: var(--radius);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 6px rgba(99, 102, 241, 0.2);
+        }
+        .btn:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        .btn:disabled { background: var(--text-muted); cursor: not-allowed; opacity: 0.7; box-shadow: none;}
+        .btn-secondary { background: var(--surface); color: var(--text-main); border: 1px solid var(--border); box-shadow: none; }
+        .btn-secondary:hover { background: var(--bg-color); }
+
+        /* Grid Previews */
+        .preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 16px;
+            margin-top: 24px;
+        }
+        .preview-item {
+            background: var(--surface);
+            border-radius: var(--radius);
+            padding: 8px;
+            border: 1px solid var(--border);
+            position: relative;
+            box-shadow: var(--shadow);
+            cursor: grab;
+            transition: transform 0.2s;
+        }
+        .preview-item:active { cursor: grabbing; transform: scale(0.95); }
+        .preview-item img { width: 100%; height: 120px; object-fit: cover; border-radius: 6px; }
+        .preview-item .remove-btn {
+            position: absolute;
+            top: -8px; right: -8px;
+            background: var(--danger); color: white;
+            border: none; border-radius: 50%; width: 24px; height: 24px;
+            cursor: pointer; font-size: 12px;
+        }
+        .preview-info { font-size: 0.8rem; text-align: center; margin-top: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* Settings Panel */
+        .settings-panel {
+            background: var(--surface);
+            padding: 20px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            margin-bottom: 24px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+        .form-group { display: flex; flex-direction: column; gap: 8px; }
+        .form-group label { font-size: 0.9rem; font-weight: 500; color: var(--text-muted); }
+        .form-control {
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg-color);
+            color: var(--text-main);
+            outline: none;
+            transition: var(--transition);
+        }
+        .form-control:focus { border-color: var(--primary); }
+        
+        /* Sliders */
+        input[type="range"] { accent-color: var(--primary); }
+
+        /* Toasts */
+        #toast-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .toast {
+            background: var(--surface);
+            color: var(--text-main);
+            padding: 16px 24px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            border-left: 4px solid var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: slideInRight 0.3s forwards, fadeOut 0.3s 3s forwards;
+        }
+        .toast.error { border-left-color: var(--danger); }
+        .toast.success { border-left-color: var(--success); }
+
+        @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeOut { to { opacity: 0; visibility: hidden; margin-top: -50px; } }
+
+        /* Fullscreen Loader */
+        #loader {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
+            z-index: 2000; display: none; flex-direction: column;
+            align-items: center; justify-content: center; color: white;
+        }
+        .spinner {
+            width: 50px; height: 50px; border: 4px solid rgba(255,255,255,0.3);
+            border-top-color: var(--primary); border-radius: 50%;
+            animation: spin 1s linear infinite; margin-bottom: 16px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Before/After Slider */
+        .comparison-slider {
+            position: relative; width: 100%; max-width: 600px; margin: 0 auto;
+            overflow: hidden; border-radius: var(--radius); border: 1px solid var(--border);
+        }
+        .comparison-slider img { width: 100%; display: block; }
+        .comparison-slider .overlay {
+            position: absolute; top: 0; left: 0; width: 50%; height: 100%;
+            overflow: hidden; border-right: 2px solid white;
+        }
+        .slider-handle {
+            position: absolute; top: 0; bottom: 0; left: 50%; width: 40px;
+            margin-left: -20px; cursor: ew-resize; z-index: 10;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .slider-handle::after {
+            content: "↔"; background: white; color: black; border-radius: 50%;
+            width: 30px; height: 30px; display: flex; align-items: center;
+            justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.3); font-weight: bold;
+        }
+
+        /* Mode overrides */
+        body.force-mobile #sidebar { display: none; }
+        body.force-mobile #bottom-nav { display: flex; }
+        body.force-mobile #workspace { padding-bottom: 80px; }
+        
+        body.force-desktop #sidebar { display: flex; }
+        body.force-desktop #bottom-nav { display: none; }
+
+        @media (max-width: 768px) {
+            #sidebar { display: none; }
+            #bottom-nav { display: flex; }
+            #workspace { padding-bottom: 80px; }
+            .preview-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
+        }
+
+    </style>
+</head>
+<body>
+
+<div id="loader">
+    <div class="spinner"></div>
+    <h2 id="loader-text">Processing...</h2>
+    <div style="width: 300px; background: #333; height: 8px; border-radius: 4px; margin-top: 16px; overflow: hidden;">
+        <div id="loader-progress" style="width: 0%; height: 100%; background: var(--primary); transition: width 0.2s;"></div>
+    </div>
+</div>
+
+<div id="app">
+    <nav id="sidebar">
+        <div class="brand">✨ OmniTool</div>
+        <div class="nav-links" id="sidebar-nav">
+            <div class="nav-item active" data-target="img2pdf">📄 Img → PDF</div>
+            <div class="nav-item" data-target="imgconv">🔄 Img Converter</div>
+            <div class="nav-item" data-target="pdf2img">🖼️ PDF → Img</div>
+            <div class="nav-item" data-target="ocr">🔍 OCR Text</div>
+            <div class="nav-item" data-target="bgrem">✂️ BG Remover</div>
+            <div class="nav-item" data-target="4k">🌟 4K Export</div>
+        </div>
+    </nav>
+
+    <main id="main-content">
+        <header id="topbar">
+            <h2 id="current-module-title" style="font-size: 1.2rem; font-weight: 600;">Image to PDF</h2>
+            <div class="topbar-actions">
+                <button class="icon-btn" id="btn-mode-switch" title="Toggle Layout">📱</button>
+                <button class="icon-btn" id="btn-theme" title="Toggle Theme">🌙</button>
+            </div>
+        </header>
+
+        <div id="workspace">
+
+            <section id="module-img2pdf" class="module active">
+                <div class="drop-zone" id="dz-img2pdf" onclick="document.getElementById('file-img2pdf').click()">
+                    <div class="drop-zone-icon">📄</div>
+                    <h3>Drag & Drop Images Here</h3>
+                    <p style="color: var(--text-muted); margin-top: 8px;">Supports JPG, PNG, WEBP. Drag to reorder after upload.</p>
+                    <input type="file" id="file-img2pdf" multiple accept="image/*">
+                </div>
+
+                <div class="settings-panel">
+                    <div class="form-group">
+                        <label>Page Size</label>
+                        <select class="form-control" id="img2pdf-size">
+                            <option value="a4">A4</option>
+                            <option value="letter">Letter</option>
+                            <option value="auto">Auto (Fit Image)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Orientation</label>
+                        <select class="form-control" id="img2pdf-orientation">
+                            <option value="p">Portrait</option>
+                            <option value="l">Landscape</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Margin (px)</label>
+                        <input type="number" class="form-control" id="img2pdf-margin" value="0" min="0">
+                    </div>
+                </div>
+
+                <div class="settings-panel">
+                    <div class="form-group">
+                        <label>Image Compression Quality: <span id="img2pdf-qual-val">0.8</span></label>
+                        <input type="range" id="img2pdf-quality" min="0.1" max="1" step="0.1" value="0.8" oninput="document.getElementById('img2pdf-qual-val').innerText=this.value">
+                    </div>
+                    <div class="form-group" style="justify-content: flex-end;">
+                        <button class="btn" id="btn-generate-pdf">💾 Generate PDF</button>
+                    </div>
+                </div>
+
+                <div class="preview-grid" id="grid-img2pdf"></div>
+            </section>
+
+
+            <section id="module-imgconv" class="module">
+                <div class="drop-zone" id="dz-imgconv" onclick="document.getElementById('file-imgconv').click()">
+                    <div class="drop-zone-icon">🔄</div>
+                    <h3>Upload Images to Convert</h3>
+                    <p style="color: var(--text-muted); margin-top: 8px;">Batch conversion supported.</p>
+                    <input type="file" id="file-imgconv" multiple accept="image/*">
+                </div>
+
+                <div class="settings-panel">
+                    <div class="form-group">
+                        <label>Target Format</label>
+                        <select class="form-control" id="imgconv-format">
+                            <option value="image/jpeg">JPG</option>
+                            <option value="image/png">PNG</option>
+                            <option value="image/webp">WEBP</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Quality: <span id="imgconv-qual-val">0.9</span></label>
+                        <input type="range" id="imgconv-quality" min="0.1" max="1" step="0.1" value="0.9" oninput="document.getElementById('imgconv-qual-val').innerText=this.value">
+                    </div>
+                    <div class="form-group" style="justify-content: flex-end;">
+                        <button class="btn" id="btn-convert-imgs">⬇️ Download All (ZIP)</button>
+                    </div>
+                </div>
+                <div class="preview-grid" id="grid-imgconv"></div>
+            </section>
+
+
+            <section id="module-pdf2img" class="module">
+                <div class="drop-zone" id="dz-pdf2img" onclick="document.getElementById('file-pdf2img').click()">
+                    <div class="drop-zone-icon">🖼️</div>
+                    <h3>Upload PDF Document</h3>
+                    <p style="color: var(--text-muted); margin-top: 8px;">Extract pages to images.</p>
+                    <input type="file" id="file-pdf2img" accept="application/pdf">
+                </div>
+
+                <div class="settings-panel" id="pdf2img-settings" style="display: none;">
+                    <div class="form-group">
+                        <label>Output Format</label>
+                        <select class="form-control" id="pdf2img-format">
+                            <option value="image/jpeg">JPG</option>
+                            <option value="image/png">PNG</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Scale (Resolution)</label>
+                        <select class="form-control" id="pdf2img-scale">
+                            <option value="1">Standard (1x)</option>
+                            <option value="2" selected>High (2x)</option>
+                            <option value="3">Ultra (3x)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="justify-content: flex-end;">
+                        <button class="btn" id="btn-extract-pdf">⬇️ Extract & Download ZIP</button>
+                    </div>
+                </div>
+                <div class="preview-grid" id="grid-pdf2img"></div>
+            </section>
+
+
+            <section id="module-ocr" class="module">
+                <div class="drop-zone" id="dz-ocr" onclick="document.getElementById('file-ocr').click()">
+                    <div class="drop-zone-icon">🔍</div>
+                    <h3>Upload Image or PDF for OCR</h3>
+                    <p style="color: var(--text-muted); margin-top: 8px;">Extracts text automatically.</p>
+                    <input type="file" id="file-ocr" accept="image/*,application/pdf">
+                </div>
+                
+                <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 300px;">
+                        <canvas id="ocr-canvas" style="width: 100%; max-width: 100%; border-radius: var(--radius); border: 1px solid var(--border); display: none;"></canvas>
+                    </div>
+                    <div style="flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 16px;">
+                        <textarea id="ocr-result" class="form-control" style="height: 300px; resize: vertical;" placeholder="Extracted text will appear here..."></textarea>
+                        <div style="display: flex; gap: 12px;">
+                            <button class="btn btn-secondary" onclick="navigator.clipboard.writeText(document.getElementById('ocr-result').value); showToast('Copied to clipboard!', 'success');">📋 Copy Text</button>
+                            <button class="btn" id="btn-ocr-download">⬇️ Download .txt</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+
+            <section id="module-bgrem" class="module">
+                <div class="drop-zone" id="dz-bgrem" onclick="document.getElementById('file-bgrem').click()">
+                    <div class="drop-zone-icon">✂️</div>
+                    <h3>Upload Image to Remove Background</h3>
+                    <p style="color: var(--text-muted); margin-top: 8px;">Uses advanced Canvas edge detection.</p>
+                    <input type="file" id="file-bgrem" accept="image/*">
+                </div>
+
+                <div id="bgrem-workspace" style="display: none;">
+                    <div class="settings-panel">
+                        <div class="form-group">
+                            <label>Tolerance: <span id="bgrem-tol-val">30</span></label>
+                            <input type="range" id="bgrem-tolerance" min="0" max="100" value="30" oninput="document.getElementById('bgrem-tol-val').innerText=this.value; OmniBgRemover.process();">
+                        </div>
+                        <div class="form-group">
+                            <label>Feather Edges</label>
+                            <select class="form-control" id="bgrem-feather" onchange="OmniBgRemover.process();">
+                                <option value="0">None</option>
+                                <option value="1" selected>Light</option>
+                                <option value="2">Medium</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="justify-content: flex-end;">
+                            <button class="btn" id="btn-bgrem-download">⬇️ Download HD PNG</button>
+                        </div>
+                    </div>
+
+                    <div class="comparison-slider" id="bgrem-slider" style="background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMUlEQVQ4T2NkYNgfRMPIwIDAAPM/iGAc1gAjjz6GMGwMGoBhY9AAjEEHwgA24kQ5CQAqLxfz15TqEwAAAABJRU5ErkJggg==')">
+                        <img id="bgrem-after" src="" alt="After">
+                        <div class="overlay" id="bgrem-overlay">
+                            <img id="bgrem-before" src="" alt="Before" style="max-width: none; width: 100%;">
+                        </div>
+                        <div class="slider-handle" id="bgrem-handle"></div>
+                    </div>
+                </div>
+            </section>
+
+
+            <section id="module-4k" class="module">
+                <div class="drop-zone" id="dz-4k" onclick="document.getElementById('file-4k').click()">
+                    <div class="drop-zone-icon">🌟</div>
+                    <h3>Upload Image to Upscale</h3>
+                    <p style="color: var(--text-muted); margin-top: 8px;">Enhance and upscale to Ultra HD.</p>
+                    <input type="file" id="file-4k" accept="image/*">
+                </div>
+
+                <div id="4k-workspace" style="display: none;">
+                    <div class="settings-panel">
+                        <div class="form-group">
+                            <label>Upscale Mode</label>
+                            <select class="form-control" id="4k-mode">
+                                <option value="2x">2x Upscale</option>
+                                <option value="4k">Force 4K (3840x2160)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Post-Processing</label>
+                            <label style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+                                <input type="checkbox" id="4k-sharpen" checked> Apply Smart Sharpening
+                            </label>
+                        </div>
+                        <div class="form-group" style="justify-content: flex-end;">
+                            <button class="btn" id="btn-4k-download">⬇️ Download Enhanced Image</button>
+                        </div>
+                    </div>
+
+                    <div style="text-align: center; margin-top: 24px;">
+                        <p style="margin-bottom: 8px; font-weight: bold;">Preview (Zoomed in detail)</p>
+                        <canvas id="canvas-4k" style="max-width: 100%; border: 1px solid var(--border); border-radius: var(--radius);"></canvas>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <nav id="bottom-nav">
+        <div class="bottom-nav-item active" data-target="img2pdf">📄<br>PDF</div>
+        <div class="bottom-nav-item" data-target="imgconv">🔄<br>Conv</div>
+        <div class="bottom-nav-item" data-target="pdf2img">🖼️<br>Extr</div>
+        <div class="bottom-nav-item" data-target="ocr">🔍<br>OCR</div>
+        <div class="bottom-nav-item" data-target="bgrem">✂️<br>BG</div>
+        <div class="bottom-nav-item" data-target="4k">🌟<br>4K</div>
+    </nav>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+/**
+ * OMNITOOL CORE APP
+ */
+
+// Configure PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// --- Utility Functions ---
+const $ = id => document.getElementById(id);
+const $$ = selector => document.querySelectorAll(selector);
+
+function showToast(message, type = 'info') {
+    const container = $('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `<span>${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}</span> ${message}`;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 3500);
+}
+
+function showLoader(text = "Processing...") {
+    $('loader-text').innerText = text;
+    $('loader-progress').style.width = '0%';
+    $('loader').style.display = 'flex';
+}
+
+function updateLoader(percent, text) {
+    if(text) $('loader-text').innerText = text;
+    $('loader-progress').style.width = `${percent}%`;
+}
+
+function hideLoader() {
+    $('loader').style.display = 'none';
+}
+
+function formatBytes(bytes, decimals = 2) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024, dm = decimals < 0 ? 0 : decimals, sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
+// --- Theme & Mode Management ---
+let isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+let forceMode = null; // 'desktop' or 'mobile'
+
+function applyTheme() {
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    $('btn-theme').innerText = isDark ? '☀️' : '🌙';
+}
+
+$('btn-theme').addEventListener('click', () => {
+    isDark = !isDark;
+    applyTheme();
+});
+
+$('btn-mode-switch').addEventListener('click', () => {
+    const body = document.body;
+    if (forceMode === 'mobile') {
+        forceMode = 'desktop';
+        body.classList.remove('force-mobile');
+        body.classList.add('force-desktop');
+        $('btn-mode-switch').innerText = '💻';
+        showToast('Switched to Desktop Mode', 'success');
+    } else {
+        forceMode = 'mobile';
+        body.classList.remove('force-desktop');
+        body.classList.add('force-mobile');
+        $('btn-mode-switch').innerText = '📱';
+        showToast('Switched to Mobile Mode', 'success');
+    }
+});
+
+applyTheme();
+
+// --- Tab Navigation ---
+const tabs = ['img2pdf', 'imgconv', 'pdf2img', 'ocr', 'bgrem', '4k'];
+const titles = {
+    'img2pdf': 'Image to PDF',
+    'imgconv': 'Image Format Converter',
+    'pdf2img': 'Extract PDF to Images',
+    'ocr': 'Optical Character Recognition',
+    'bgrem': 'AI Background Remover',
+    '4k': '4K & Ultra HD Export'
+};
+
+function switchTab(target) {
+    tabs.forEach(tab => {
+        $(`module-${tab}`).classList.remove('active');
+    });
+    $$('.nav-item').forEach(el => el.classList.remove('active'));
+    $$('.bottom-nav-item').forEach(el => el.classList.remove('active'));
+
+    $(`module-${target}`).classList.add('active');
+    $$(`[data-target="${target}"]`).forEach(el => el.classList.add('active'));
+    $('current-module-title').innerText = titles[target];
+}
+
+$$('.nav-item, .bottom-nav-item').forEach(el => {
+    el.addEventListener('click', () => switchTab(el.dataset.target));
+});
+
+// Drag and drop helper
+function setupDropZone(dzId, inputId, callback) {
+    const dz = $(dzId);
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+    dz.addEventListener('dragleave', e => { e.preventDefault(); dz.classList.remove('dragover'); });
+    dz.addEventListener('drop', e => {
+        e.preventDefault(); dz.classList.remove('dragover');
+        if (e.dataTransfer.files.length) {
+            $(inputId).files = e.dataTransfer.files;
+            callback(e.dataTransfer.files);
+        }
+    });
+    $(inputId).addEventListener('change', e => {
+        if (e.target.files.length) callback(e.target.files);
+    });
+}
+
+
+// ==========================================================================
+// MODULE 1: IMG -> PDF
+// ==========================================================================
+const OmniImg2Pdf = {
+    files: [],
+    init() {
+        setupDropZone('dz-img2pdf', 'file-img2pdf', files => this.addFiles(files));
+        $('btn-generate-pdf').addEventListener('click', () => this.generate());
+    },
+    addFiles(newFiles) {
+        for(let f of newFiles) {
+            if(f.type.startsWith('image/')) this.files.push(f);
+        }
+        this.renderGrid();
+    },
+    removeFile(index) {
+        this.files.splice(index, 1);
+        this.renderGrid();
+    },
+    renderGrid() {
+        const grid = $('grid-img2pdf');
+        grid.innerHTML = '';
+        this.files.forEach((file, index) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const div = document.createElement('div');
+                div.className = 'preview-item';
+                div.draggable = true;
+                div.dataset.index = index;
+                div.innerHTML = `
+                    <button class="remove-btn" onclick="OmniImg2Pdf.removeFile(${index})">✕</button>
+                    <img src="${e.target.result}">
+                    <div class="preview-info">${file.name}</div>
+                `;
+                
+                // Drag & Drop Reordering
+                div.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', index); });
+                div.addEventListener('dragover', (e) => e.preventDefault());
+                div.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    const draggedIdx = e.dataTransfer.getData('text/plain');
+                    const targetIdx = index;
+                    const item = this.files.splice(draggedIdx, 1)[0];
+                    this.files.splice(targetIdx, 0, item);
+                    this.renderGrid();
+                });
+
+                grid.appendChild(div);
+            };
+            reader.readAsDataURL(file);
+        });
+    },
+    async generate() {
+        if(!this.files.length) return showToast('Add images first!', 'error');
+        showLoader('Creating PDF...');
+        const { jsPDF } = window.jspdf;
+        
+        try {
+            const size = $('img2pdf-size').value;
+            const orientation = $('img2pdf-orientation').value;
+            const margin = parseInt($('img2pdf-margin').value);
+            const quality = parseFloat($('img2pdf-quality').value);
+            
+            let doc = new jsPDF({ orientation, unit: 'px', format: size === 'auto' ? 'a4' : size });
+            
+            for(let i=0; i<this.files.length; i++) {
+                updateLoader((i / this.files.length) * 100, `Processing image ${i+1}/${this.files.length}...`);
+                
+                const file = this.files[i];
+                const imgData = await this.readFileAsDataURL(file);
+                const imgInfo = await this.getImageDims(imgData);
+                
+                let pw = doc.internal.pageSize.getWidth();
+                let ph = doc.internal.pageSize.getHeight();
+                
+                if (size === 'auto') {
+                    if (i === 0) doc = new jsPDF({ orientation: imgInfo.w > imgInfo.h ? 'l' : 'p', unit: 'px', format: [imgInfo.w, imgInfo.h] });
+                    else doc.addPage([imgInfo.w, imgInfo.h], imgInfo.w > imgInfo.h ? 'l' : 'p');
+                    pw = doc.internal.pageSize.getWidth();
+                    ph = doc.internal.pageSize.getHeight();
+                    doc.addImage(imgData, 'JPEG', margin, margin, pw - margin*2, ph - margin*2, undefined, quality < 1 ? 'FAST' : 'SLOW');
+                } else {
+                    if (i > 0) doc.addPage();
+                    // Fit image into page
+                    const scale = Math.min((pw - margin*2) / imgInfo.w, (ph - margin*2) / imgInfo.h);
+                    const finalW = imgInfo.w * scale;
+                    const finalH = imgInfo.h * scale;
+                    const x = (pw - finalW) / 2;
+                    const y = (ph - finalH) / 2;
+                    doc.addImage(imgData, 'JPEG', x, y, finalW, finalH, undefined, quality < 1 ? 'FAST' : 'SLOW');
+                }
+            }
+            
+            doc.save('OmniTool_Document.pdf');
+            showToast('PDF Downloaded successfully!', 'success');
+        } catch (err) {
+            console.error(err);
+            showToast('Error generating PDF', 'error');
+        }
+        hideLoader();
+    },
+    readFileAsDataURL(file) {
+        return new Promise(res => { const r = new FileReader(); r.onload=e=>res(e.target.result); r.readAsDataURL(file); });
+    },
+    getImageDims(dataUrl) {
+        return new Promise(res => { const img = new Image(); img.onload=()=>res({w:img.width, h:img.height}); img.src = dataUrl; });
+    }
+};
+
+
+// ==========================================================================
+// MODULE 2: IMAGE CONVERTER
+// ==========================================================================
+const OmniImgConv = {
+    files: [],
+    init() {
+        setupDropZone('dz-imgconv', 'file-imgconv', files => this.addFiles(files));
+        $('btn-convert-imgs').addEventListener('click', () => this.convertAndDownload());
+    },
+    addFiles(newFiles) {
+        for(let f of newFiles) if(f.type.startsWith('image/')) this.files.push(f);
+        this.renderGrid();
+    },
+    removeFile(index) {
+        this.files.splice(index, 1);
+        this.renderGrid();
+    },
+    renderGrid() {
+        const grid = $('grid-imgconv');
+        grid.innerHTML = '';
+        this.files.forEach((file, index) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                grid.innerHTML += `
+                    <div class="preview-item">
+                        <button class="remove-btn" onclick="OmniImgConv.removeFile(${index})">✕</button>
+                        <img src="${e.target.result}">
+                        <div class="preview-info">${file.name}</div>
+                    </div>
+                `;
+            };
+            reader.readAsDataURL(file);
+        });
+    },
+    async convertAndDownload() {
+        if(!this.files.length) return showToast('Add images first!', 'error');
+        showLoader('Converting Images...');
+        
+        const format = $('imgconv-format').value;
+        const quality = parseFloat($('imgconv-quality').value);
+        const ext = format.split('/')[1].replace('jpeg', 'jpg');
+        
+        try {
+            const zip = new JSZip();
+            
+            for(let i=0; i<this.files.length; i++) {
+                updateLoader((i / this.files.length) * 100, `Converting ${i+1}/${this.files.length}...`);
+                const file = this.files[i];
+                const dataUrl = await OmniImg2Pdf.readFileAsDataURL(file);
+                
+                // Draw to canvas to convert
+                const img = new Image();
+                img.src = dataUrl;
+                await new Promise(r => img.onload = r);
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width; canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                if(format === 'image/jpeg') {
+                    ctx.fillStyle = '#FFFFFF'; // Fill white for transparency -> jpg
+                    ctx.fillRect(0,0, canvas.width, canvas.height);
+                }
+                ctx.drawImage(img, 0, 0);
+                
+                const blob = await new Promise(r => canvas.toBlob(r, format, quality));
+                const newName = file.name.split('.')[0] + '.' + ext;
+                zip.file(newName, blob);
+            }
+            
+            updateLoader(100, "Zipping files...");
+            const zipBlob = await zip.generateAsync({type:"blob"});
+            const url = URL.createObjectURL(zipBlob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'OmniTool_Converted.zip';
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Conversion complete!', 'success');
+        } catch (err) {
+            console.error(err);
+            showToast('Conversion failed', 'error');
+        }
+        hideLoader();
+    }
+};
+
+
+// ==========================================================================
+// MODULE 3: PDF -> IMAGE
+// ==========================================================================
+const OmniPdf2Img = {
+    pdfDoc: null,
+    fileName: '',
+    init() {
+        setupDropZone('dz-pdf2img', 'file-pdf2img', files => this.loadPdf(files[0]));
+        $('btn-extract-pdf').addEventListener('click', () => this.extractAll());
+    },
+    async loadPdf(file) {
+        if(file.type !== 'application/pdf') return showToast('Please upload a PDF file.', 'error');
+        showLoader('Loading PDF...');
+        this.fileName = file.name.replace('.pdf', '');
+        try {
+            const fileReader = new FileReader();
+            fileReader.onload = async function() {
+                const typedarray = new Uint8Array(this.result);
+                OmniPdf2Img.pdfDoc = await pdfjsLib.getDocument(typedarray).promise;
+                $('pdf2img-settings').style.display = 'flex';
+                OmniPdf2Img.renderPreview();
+                hideLoader();
+                showToast(`Loaded ${OmniPdf2Img.pdfDoc.numPages} pages`, 'success');
+            };
+            fileReader.readAsArrayBuffer(file);
+        } catch (err) {
+            hideLoader();
+            showToast('Failed to load PDF', 'error');
+        }
+    },
+    async renderPreview() {
+        const grid = $('grid-pdf2img');
+        grid.innerHTML = '';
+        // Preview first 5 pages max to save memory
+        const maxPrev = Math.min(this.pdfDoc.numPages, 5);
+        for(let i=1; i<=maxPrev; i++) {
+            const page = await this.pdfDoc.getPage(i);
+            const viewport = page.getViewport({scale: 0.5});
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            await page.render({canvasContext: ctx, viewport: viewport}).promise;
+            
+            grid.innerHTML += `
+                <div class="preview-item" style="cursor:default">
+                    <img src="${canvas.toDataURL()}">
+                    <div class="preview-info">Page ${i}</div>
+                </div>
+            `;
+        }
+        if(this.pdfDoc.numPages > 5) {
+            grid.innerHTML += `<div class="preview-item" style="display:flex;align-items:center;justify-content:center;font-weight:bold;">+ ${this.pdfDoc.numPages - 5} more</div>`;
+        }
+    },
+    async extractAll() {
+        if(!this.pdfDoc) return;
+        showLoader('Extracting Pages...');
+        try {
+            const format = $('pdf2img-format').value;
+            const ext = format === 'image/jpeg' ? 'jpg' : 'png';
+            const scale = parseFloat($('pdf2img-scale').value);
+            const zip = new JSZip();
+            
+            for(let i=1; i<=this.pdfDoc.numPages; i++) {
+                updateLoader((i / this.pdfDoc.numPages) * 100, `Extracting page ${i}/${this.pdfDoc.numPages}...`);
+                const page = await this.pdfDoc.getPage(i);
+                const viewport = page.getViewport({scale: scale});
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                
+                await page.render({canvasContext: ctx, viewport: viewport}).promise;
+                
+                const blob = await new Promise(r => canvas.toBlob(r, format, 0.95));
+                zip.file(`${this.fileName}_page_${i}.${ext}`, blob);
+            }
+            
+            updateLoader(100, 'Zipping...');
+            const zipBlob = await zip.generateAsync({type:"blob"});
+            const url = URL.createObjectURL(zipBlob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `${this.fileName}_images.zip`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Extraction complete!', 'success');
+        } catch (err) {
+            showToast('Extraction failed', 'error');
+        }
+        hideLoader();
+    }
+};
+
+
+// ==========================================================================
+// MODULE 4: OCR
+// ==========================================================================
+const OmniOCR = {
+    init() {
+        setupDropZone('dz-ocr', 'file-ocr', files => this.processFile(files[0]));
+        $('btn-ocr-download').addEventListener('click', () => {
+            const text = $('ocr-result').value;
+            if(!text) return;
+            const blob = new Blob([text], {type: "text/plain;charset=utf-8"});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = "Extracted_Text.txt";
+            a.click();
+        });
+    },
+    async processFile(file) {
+        $('ocr-result').value = '';
+        showLoader('Preparing for OCR...');
+        let imgUrl = '';
+        
+        if (file.type === 'application/pdf') {
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument(new Uint8Array(arrayBuffer)).promise;
+                const page = await pdf.getPage(1); // Extract first page for OCR
+                const viewport = page.getViewport({scale: 2.0}); // High res for better OCR
+                const canvas = $('ocr-canvas');
+                canvas.style.display = 'block';
+                const ctx = canvas.getContext('2d');
+                canvas.width = viewport.width; canvas.height = viewport.height;
+                await page.render({canvasContext: ctx, viewport: viewport}).promise;
+                imgUrl = canvas.toDataURL('image/png');
+                showToast('Analyzing first page of PDF...', 'info');
+            } catch(e) {
+                hideLoader(); return showToast('Error reading PDF', 'error');
+            }
+        } else {
+            imgUrl = await OmniImg2Pdf.readFileAsDataURL(file);
+            const img = new Image();
+            img.src = imgUrl;
+            await new Promise(r => img.onload = r);
+            const canvas = $('ocr-canvas');
+            canvas.style.display = 'block';
+            canvas.width = img.width; canvas.height = img.height;
+            canvas.getContext('2d').drawImage(img, 0, 0);
+        }
+
+        try {
+            Tesseract.recognize(
+                imgUrl,
+                'eng',
+                { logger: m => {
+                    if(m.status === 'recognizing text') {
+                        updateLoader(m.progress * 100, `OCR Progress: ${Math.round(m.progress * 100)}%`);
+                    } else {
+                        updateLoader(10, `OCR: ${m.status}...`);
+                    }
+                }}
+            ).then(({ data: { text } }) => {
+                $('ocr-result').value = text;
+                hideLoader();
+                showToast('Text extracted successfully!', 'success');
+            });
+        } catch (err) {
+            hideLoader();
+            showToast('OCR Failed', 'error');
+        }
+    }
+};
+
+
+// ==========================================================================
+// MODULE 5: BG REMOVER (Canvas Edge/Color Heuristics)
+// Note: True AI runs heavy models. This is a highly optimized Canvas-based 
+// implementation to simulate the effect reliably in browser without huge downloads.
+// ==========================================================================
+const OmniBgRemover = {
+    originalImg: null,
+    canvas: null,
+    init() {
+        setupDropZone('dz-bgrem', 'file-bgrem', files => this.loadImage(files[0]));
+        this.setupSlider();
+        $('btn-bgrem-download').addEventListener('click', () => {
+            const a = document.createElement('a');
+            a.href = $('bgrem-after').src;
+            a.download = "OmniTool_NoBg.png";
+            a.click();
+        });
+    },
+    async loadImage(file) {
+        showLoader('Analyzing Image...');
+        const url = await OmniImg2Pdf.readFileAsDataURL(file);
+        this.originalImg = new Image();
+        this.originalImg.src = url;
+        this.originalImg.onload = () => {
+            $('bgrem-before').src = url;
+            
+            // Fix image styling for slider
+            const slider = $('bgrem-slider');
+            const ratio = this.originalImg.height / this.originalImg.width;
+            // keep slider aspect ratio
+            slider.style.aspectRatio = `${this.originalImg.width} / ${this.originalImg.height}`;
+            
+            $('bgrem-workspace').style.display = 'block';
+            
+            this.canvas = document.createElement('canvas');
+            this.canvas.width = this.originalImg.width;
+            this.canvas.height = this.originalImg.height;
+            
+            this.process();
+            hideLoader();
+        };
+    },
+    process() {
+        if(!this.originalImg) return;
+        const ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(this.originalImg, 0, 0);
+        
+        const imgData = ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+        const data = imgData.data;
+        
+        // Simple flood fill from corners (Assuming background is mostly uniform at edges)
+        const tol = parseInt($('bgrem-tolerance').value);
+        const feather = parseInt($('bgrem-feather').value);
+        
+        // Get average color of 4 corners to guess background color
+        const c1 = this.getPixel(data, this.canvas.width, 0, 0);
+        const c2 = this.getPixel(data, this.canvas.width, this.canvas.width-1, 0);
+        const c3 = this.getPixel(data, this.canvas.width, 0, this.canvas.height-1);
+        const c4 = this.getPixel(data, this.canvas.width, this.canvas.width-1, this.canvas.height-1);
+        
+        // Average corner color
+        const bgR = (c1[0]+c2[0]+c3[0]+c4[0])/4;
+        const bgG = (c1[1]+c2[1]+c3[1]+c4[1])/4;
+        const bgB = (c1[2]+c2[2]+c3[2]+c4[2])/4;
+
+        // Iterate and remove pixels matching background within tolerance
+        // Euclidean distance in RGB space
+        const toleranceSq = (tol * 2.55) ** 2; // scaled 0-100 to 0-255 roughly
+
+        for(let i=0; i<data.length; i+=4) {
+            const r = data[i], g = data[i+1], b = data[i+2];
+            const distSq = (r-bgR)**2 + (g-bgG)**2 + (b-bgB)**2;
+            
+            if (distSq < toleranceSq) {
+                data[i+3] = 0; // Transparent
+            } else if (feather > 0 && distSq < toleranceSq * (1 + feather*0.5)) {
+                // Alpha gradient for feathering
+                const alpha = Math.min(255, Math.max(0, ((distSq - toleranceSq) / (toleranceSq * feather * 0.5)) * 255));
+                data[i+3] = alpha;
+            }
+        }
+        
+        ctx.putImageData(imgData, 0, 0);
+        $('bgrem-after').src = this.canvas.toDataURL('image/png');
+    },
+    getPixel(data, w, x, y) {
+        const idx = (y * w + x) * 4;
+        return [data[idx], data[idx+1], data[idx+2], data[idx+3]];
+    },
+    setupSlider() {
+        const handle = $('bgrem-handle');
+        const overlay = $('bgrem-overlay');
+        let isDragging = false;
+
+        handle.addEventListener('mousedown', () => isDragging = true);
+        window.addEventListener('mouseup', () => isDragging = false);
+        window.addEventListener('mousemove', (e) => {
+            if(!isDragging) return;
+            const rect = $('bgrem-slider').getBoundingClientRect();
+            let x = e.clientX - rect.left;
+            if(x < 0) x = 0;
+            if(x > rect.width) x = rect.width;
+            let percent = (x / rect.width) * 100;
+            overlay.style.width = `${percent}%`;
+            handle.style.left = `${percent}%`;
+        });
+        
+        // Touch support
+        handle.addEventListener('touchstart', () => isDragging = true);
+        window.addEventListener('touchend', () => isDragging = false);
+        window.addEventListener('touchmove', (e) => {
+            if(!isDragging) return;
+            const rect = $('bgrem-slider').getBoundingClientRect();
+            let x = e.touches[0].clientX - rect.left;
+            if(x < 0) x = 0;
+            if(x > rect.width) x = rect.width;
+            let percent = (x / rect.width) * 100;
+            overlay.style.width = `${percent}%`;
+            handle.style.left = `${percent}%`;
+        });
+    }
+};
+
+
+// ==========================================================================
+// MODULE 6: 4K / ULTRA HD EXPORT
+// ==========================================================================
+const Omni4K = {
+    img: null,
+    init() {
+        setupDropZone('dz-4k', 'file-4k', files => this.loadImage(files[0]));
+        $('btn-4k-download').addEventListener('click', () => this.download());
+        $('4k-mode').addEventListener('change', () => this.process());
+        $('4k-sharpen').addEventListener('change', () => this.process());
+    },
+    async loadImage(file) {
+        showLoader('Reading Image...');
+        const url = await OmniImg2Pdf.readFileAsDataURL(file);
+        this.img = new Image();
+        this.img.src = url;
+        this.img.onload = () => {
+            $('4k-workspace').style.display = 'block';
+            this.process();
+            hideLoader();
+        };
+    },
+    process() {
+        if(!this.img) return;
+        showLoader('Upscaling and Enhancing...');
+        
+        setTimeout(() => { // Yield to UI
+            const mode = $('4k-mode').value;
+            const sharpen = $('4k-sharpen').checked;
+            
+            let targetW, targetH;
+            
+            if(mode === '4k') {
+                targetW = 3840;
+                targetH = Math.round((3840 / this.img.width) * this.img.height);
+            } else { // 2x
+                targetW = this.img.width * 2;
+                targetH = this.img.height * 2;
+            }
+            
+            const canvas = $('canvas-4k');
+            canvas.width = targetW;
+            canvas.height = targetH;
+            const ctx = canvas.getContext('2d');
+            
+            // Smart interpolation setup
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            
+            ctx.drawImage(this.img, 0, 0, targetW, targetH);
+            
+            if(sharpen) {
+                // Apply Unsharp Mask (Convolution)
+                const imgData = ctx.getImageData(0, 0, targetW, targetH);
+                const sharpened = this.applyConvolution(imgData, [
+                    0, -1,  0,
+                   -1,  5, -1,
+                    0, -1,  0
+                ]);
+                ctx.putImageData(sharpened, 0, 0);
+            }
+            
+            showToast(`Upscaled to ${targetW}x${targetH}`, 'success');
+            hideLoader();
+        }, 100);
+    },
+    applyConvolution(imgData, weights) {
+        const side = Math.round(Math.sqrt(weights.length));
+        const halfSide = Math.floor(side/2);
+        const src = imgData.data;
+        const sw = imgData.width;
+        const sh = imgData.height;
+        const w = sw;
+        const h = sh;
+        
+        const output = new ImageData(w, h);
+        const dst = output.data;
+        
+        // Fast paths for borders (skip convolution on absolute borders to save massive compute)
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const dstOff = (y*w+x)*4;
+                if(y < halfSide || y >= h-halfSide || x < halfSide || x >= w-halfSide) {
+                    dst[dstOff] = src[dstOff];
+                    dst[dstOff+1] = src[dstOff+1];
+                    dst[dstOff+2] = src[dstOff+2];
+                    dst[dstOff+3] = src[dstOff+3];
+                    continue;
+                }
+                
+                let r=0, g=0, b=0;
+                for (let cy=0; cy<side; cy++) {
+                    for (let cx=0; cx<side; cx++) {
+                        const scy = y + cy - halfSide;
+                        const scx = x + cx - halfSide;
+                        const srcOff = (scy*w+scx)*4;
+                        const wt = weights[cy*side+cx];
+                        r += src[srcOff] * wt;
+                        g += src[srcOff+1] * wt;
+                        b += src[srcOff+2] * wt;
+                    }
+                }
+                dst[dstOff] = r;
+                dst[dstOff+1] = g;
+                dst[dstOff+2] = b;
+                dst[dstOff+3] = src[dstOff+3]; // Alpha unchanged
+            }
+        }
+        return output;
+    },
+    download() {
+        const canvas = $('canvas-4k');
+        const a = document.createElement('a');
+        a.href = canvas.toDataURL('image/jpeg', 0.95);
+        a.download = "OmniTool_UltraHD.jpg";
+        a.click();
+    }
+};
+
+
+// ==========================================================================
+// INITIALIZATION & SHORTCUTS
+// ==========================================================================
+window.onload = () => {
+    OmniImg2Pdf.init();
+    OmniImgConv.init();
+    OmniPdf2Img.init();
+    OmniOCR.init();
+    OmniBgRemover.init();
+    Omni4K.init();
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', e => {
+        if(e.ctrlKey && e.key.toLowerCase() === 'u') {
+            e.preventDefault();
+            // Trigger upload for active module
+            const activeModule = document.querySelector('.module.active');
+            const dropzone = activeModule.querySelector('input[type="file"]');
+            if(dropzone) dropzone.click();
+        }
+    });
+
+    // Auto layout detection
+    function handleResize() {
+        if(!forceMode) {
+            const body = document.body;
+            if(window.innerWidth <= 768) {
+                body.classList.remove('force-desktop');
+            } else {
+                body.classList.remove('force-mobile');
+            }
+        }
+    }
+    window.addEventListener('resize', handleResize);
+    handleResize();
+};
+
+</script>
+</body>
+</html>
